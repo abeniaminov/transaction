@@ -15,7 +15,7 @@ Scalable deadlock-resolving MVVC (MultiVersion Concurrency Control) read-committ
 A scalable, deadlock-resolving transaction application for Erlang/OTP gen_server like behaviour  
 
 
-This application is inspired on MVVC algorithms and ideas, belonging to <a href="https://www.google.com/url?q=https://en.wikipedia.org/wiki/David_P._Reed”>David Patrick Reed</a>
+This application is inspired on MVVC algorithms and ideas, belonging to David Patrick Reed
 , Philip A. Bernstein, Nathan Goodman and Jim Starkey
 
 
