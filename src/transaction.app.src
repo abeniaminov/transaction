@@ -1,0 +1,19 @@
+%%%-------------------------------------------------------------------
+%%% @author Alexander
+%%% @copyright (C) 2015, <COMPANY>
+%%% @doc
+%%%
+%%% @end
+%%% Created : 10. Дек. 2015 10:33
+%%%-------------------------------------------------------------------
+{application, transaction, [
+    {description, "Erlang gen_server transaction library"},
+    {vsn, "0.1"},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib
+    ]},
+    {mod, {transaction_app, [trpc]}},
+    {env, []}
+]}.
