@@ -4,7 +4,7 @@
 __Authors:__ Alexander Beniaminov ([`abeniaminov@gmail.com`](mailto:abeniaminov@gmail.com))
 
 
-Scalable deadlock-resolving MVVC (MultiVersion Concurrency Control) read-committed transaction system
+Scalable deadlock-resolving MVCC (MultiVersion Concurrency Control) read-committed transaction system
 
 
 
@@ -15,7 +15,7 @@ Scalable deadlock-resolving MVVC (MultiVersion Concurrency Control) read-committ
 A scalable, deadlock-resolving transaction application for Erlang/OTP gen_server like behaviour  
 
 
-This application is inspired on MVVC algorithms and ideas, belonging to [David Patrick Reed](https://www.google.com/url?q=https://en.wikipedia.org/wiki/David_P._Reed)
+This application is inspired on MVCC algorithms and ideas, belonging to [David Patrick Reed](https://www.google.com/url?q=https://en.wikipedia.org/wiki/David_P._Reed)
 , [Philip A. Bernstein, Nathan Goodman](https://www.cs.berkeley.edu/~brewer/cs262/concurrency-distributed-databases.pdf) and [Jim Starkey](https://en.wikipedia.org/wiki/Jim_Starkey)
 
 
@@ -56,7 +56,7 @@ OR you call one of the functions
 
 
 
-# Приложение transaction #.
+## Приложение transaction ##.
 Приложение поддерживающее транзакции для процессов типа gen_server 
 
 
