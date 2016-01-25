@@ -33,22 +33,22 @@ About [MVCC](https://en.wikipedia.org/w/index.php?title=Multiversion_concurrency
 Call 'application:start(transaction)' on each node where you plan to use processes with tgen_server behaivour.
 Transaction mast be started before any action with tgen_server:
 
-> Tr1 = transaction:start(Options).
+	Tr1 = transaction:start(Options).
 
 Options is a map of type:
 
->>-type tr_options() :: #{i_level => version_level(), wait => wait(), overwrite => overwrite()}.
->>-type version_level() :: record_version |no_record_version.
->>-type wait() :: wait | no_wait.
->>-type overwrite() :: boolean().
+	-type tr_options() :: #{i_level => version_level(), wait => wait(), overwrite => overwrite()}.
+	-type version_level() :: record_version |no_record_version.
+	-type wait() :: wait | no_wait.
+	-type overwrite() :: boolean().
 
 OR you call one of the functions
-> Tr = transaction:start(). %% record_version, no_wait, no overwrite
-> Tr = transaction:start_o(). %% record_version, no_wait, overwrite
-> Tr = transaction:start_n(). %% no_record_version, no_wait, no overwrite
-> Tr = transaction:start_no(). %% no_record_version, no_wait, overwrite 
-> Tr = transaction:start_nw(). %% no_record_version, wait, no overwrite
-> Tr = transaction:start_nwo(). %% no_record_version, wait, overwrite
+	Tr = transaction:start(). %% record_version, no_wait, no overwrite
+	Tr = transaction:start_o(). %% record_version, no_wait, overwrite
+	Tr = transaction:start_n(). %% no_record_version, no_wait, no overwrite
+	Tr = transaction:start_no(). %% no_record_version, no_wait, overwrite 
+	Tr = transaction:start_nw(). %% no_record_version, wait, no overwrite
+	Tr = transaction:start_nwo(). %% no_record_version, wait, overwrite
 
 ## Structure of transaction ##
 
@@ -74,12 +74,12 @@ OR you call one of the functions
 Все действия с tgen_server процессом должны производиться в контексте какой-нибудь транзакции.
 
 Транзакция запускается одной из функцией: 
-> Tr = transaction:start(). %% record_version, no_wait, no overwrite
-> Tr = transaction:start_o(). %% record_version, no_wait, overwrite
-> Tr = transaction:start_n(). %% no_record_version, no_wait, no overwrite
-> Tr = transaction:start_no(). %% no_record_version, no_wait, overwrite 
-> Tr = transaction:start_nw(). %% no_record_version, wait, no overwrite
-> Tr = transaction:start_nwo(). %% no_record_version, wait, overwrite
+	Tr = transaction:start(). %% record_version, no_wait, no overwrite
+	Tr = transaction:start_o(). %% record_version, no_wait, overwrite
+	Tr = transaction:start_n(). %% no_record_version, no_wait, no overwrite
+	Tr = transaction:start_no(). %% no_record_version, no_wait, overwrite 
+	Tr = transaction:start_nw(). %% no_record_version, wait, no overwrite
+	Tr = transaction:start_nwo(). %% no_record_version, wait, overwrite
 
 
  
@@ -108,37 +108,37 @@ overwrite (true or false)
 
 Функции создания уникальной транзакции 
 
-> transaction:start(). %% record_version, no_wait, no overwrite
-> transaction:start_o(). %% record_version, no_wait, overwrite
-> transaction:start_n(). %% no_record_version, no_wait, no overwrite
-> transaction:start_no(). %% no_record_version, no_wait, overwrite 
-> transaction:start_nw(). %% no_record_version, wait, no overwrite
-> transaction:start_nwo(). %% no_record_version, wait, overwrite
+	transaction:start(). %% record_version, no_wait, no overwrite
+	transaction:start_o(). %% record_version, no_wait, overwrite
+	transaction:start_n(). %% no_record_version, no_wait, no overwrite
+	transaction:start_no(). %% no_record_version, no_wait, overwrite 
+	transaction:start_nw(). %% no_record_version, wait, no overwrite
+	transaction:start_nwo(). %% no_record_version, wait, overwrite
 
 Функция возвращает мэп из пяти элементов: уникальный номер транзакции, параметр величины ставки для разрешения ситуации deadlock, параметр использования версии (record_version или  no_record_version), параметр поведения при блокировке (wait или no_wait) и overwrite - разрешение перекрывающих изменений, который по-умолчанию false. 
 
 
-> transaction:commit(Tr). 
+	transaction:commit(Tr). 
 
 Согласованный перевод всех процессов из состояния active в committed. Все изменения во всех процессах, сделанные в контексте транзакции Tr, будут сохранены. Все процессы, созданные или остановленные в контексте этой транзакции, будут соответственно работать или будут остановлены.  
 
 
-> transaction:rollback(Tr).
+	transaction:rollback(Tr).
 
 Согласованный перевод всех процессов из состояния active в committed. Все изменения во всех процессах, сделанные в контексте транзакции Tr, будут отменены. Все процессы, созданные в контексте этой транзакции, будут остановлены, а остановленные процессы останутся живы с последним committed состоянием. 
 
 
->transaction:set_locks(Tr, L)
+	transaction:set_locks(Tr, L)
 
 Попытка перевести в состояние active все процессы из списка L. Возвращает ok, если это удалось сделать, busy или deadlock, если не удалось. При этом часть процессов может остаться в состоянии active. Решать, что делать дальше  остается на усмотрение клиента. 
 
 
 ## API tgen_server ##
 
->tgen_server:start(Mod, Args, Tr, Options).
->tgen_server:start(Name, Mod, Args, Tr, Options). 
->tgen_server:start_link(Mod, Args, Tr, Options).
->tgen_server:start_link(Name, Mod, Args, Tr, Options).
+	tgen_server:start(Mod, Args, Tr, Options).
+	tgen_server:start(Name, Mod, Args, Tr, Options). 
+	tgen_server:start_link(Mod, Args, Tr, Options).
+	tgen_server:start_link(Name, Mod, Args, Tr, Options).
 
 аналог старта процесса gen_server, только третьим параметром является контекст транзакции. В процессе старта запускается функция обратного вызова init. Процесс в это время в состоянии starting и виден только в контексте создавшей его транзакции. Для всех остальных транзакций любого типа он будет недоступен. После подтверждения транзакции процесс перейдет в состояние committed и станет виден другим транзакциям. Если создавшая этот процесс транзакция откатится, то процесс будет остановлен.
 
@@ -150,20 +150,20 @@ overwrite (true or false)
 
 То же, что и предыдущая функция, за исключением того, что в первый параметр является индикатором, следует ли действительно вызывать фунцию. Используется для написания более простого кода.  
 
->lock(Res, Pid, Tr) ->
->   case Res of
->       deadlock -> deadlock;
->       busy -> busy;
->       lose -> lose;
->       _ ->  lock(Pid, Tr)
->   end.
+	lock(Res, Pid, Tr) ->
+	   case Res of
+	       deadlock -> deadlock;
+	       busy -> busy;
+	       lose -> lose;
+	       _ ->  lock(Pid, Tr)
+	   end.
 
 
->tgen_server:stop(Pid,  Tr)
+	tgen_server:stop(Pid,  Tr)
 Попытка остановить процесс. На самом деле процесс не останавливается, а переходит в состояние stopping. Если в дальнейшем транзакция подтверждается, то процесс останавливается, если транзакция отменяется, то процесс переходит в предыдущее закоммиченное состояние. В процессе останова вызывается функция обратного вызова terminate
 
 
->tgen_server:call(Pid, Tr, Request)
+	tgen_server:call(Pid, Tr, Request)
 Аналог call функции gen_server, второй параметр - это контекст транзакции, в котором должна выполниться эта функция.
 
 Возвращает результат запроса к серверу, если все в порядке; busy,если процесс занят; deadlock,если попал в ситуацию взаимной блокировки и проиграл в процессе её разрешения; lose, если попал в ситуацию dirty update. Вызывается функция обратного вызова handle_call
@@ -172,9 +172,9 @@ overwrite (true or false)
 
 ## функции обратного вызова ##
 
->init(Tr, Args)
->handle_call(Tr, Request, From, State)
->terminate(Tr, Reason, State)
+	init(Tr, Args)
+	handle_call(Tr, Request, From, State)
+	terminate(Tr, Reason, State)
 
 аналоги соответствующих функций gen_server, первый параметр - контекст вызывающей транзакции.
 
@@ -182,104 +182,104 @@ overwrite (true or false)
 ## пример tgen_server ## 
 
 Простейший tgen_server процесс, который умеет хранить и отдавать целиком произвольный erlang терм. А еще умеет запускать еще один такой процесс в контексте транзакции.   
+	
+	-module(tgen_sampl).
+	-behaviour(tgen_server).
 
--module(tgen_sampl).
--behaviour(tgen_server).
-
-%% API
--export([start_link/3, start_link/2]).
--export([set_value/3, get_value/2, stop/2, start_from/3]).
-
-
-%% gen_server callbacks
--export([init/2,
-   handle_call/4,
-   handle_info/3,
-   terminate/3,
-   code_change/3]).
-
--define(SERVER, ?MODULE).
+	%% API
+	-export([start_link/3, start_link/2]).
+	-export([set_value/3, get_value/2, stop/2, start_from/3]).
 
 
-------------------------------------------------------
-
-start_link(Name, Tr, InitVal) ->   
-  tgen_server:start_link({local, Name}, ?MODULE, InitVal, Tr, []).
-
-start_link(Tr, InitVal) ->
-   tgen_server:start_link(?MODULE, InitVal, Tr, []).
-
-
-set_value(Pid, Tr, Value) ->
-   tgen_server:call(Pid, Tr, {set_value, Value}).
-
-get_value(Pid, Tr) ->
-   tgen_server:call(Pid, Tr, get_value).
-
-start_from(Pid, Tr, Value) ->
-   tgen_server:call(Pid, Tr, {start_from, Value}).
-
-stop(Pid, Tr) ->
-   tgen_server:stop(Pid, Tr).
-
-
-
-init(_Tr, InitVal) ->
-   {ok, InitVal}.
-
-
-handle_call(_Tr, {set_value, Value}, _From, _State) ->
-   {reply, ok, Value};
-
-handle_call(Tr, {start_from, Value}, _From, _State) ->
-   NewPid = start_link(Tr, Value),
-   {reply, NewPid, Value};
-
-handle_call(_Tr, get_value, _From, State) ->
-   {reply, State, State}.
-
-handle_info(_Tr,_Info, State) ->
-   {noreply, State}.
-
-terminate(_Tr, _Reason, _State) ->
-   ok.
-
-code_change(_OldVsn, State, _Extra) ->
-   {ok, State}.
+	%% gen_server callbacks
+	-export([init/2,
+	   handle_call/4,
+	   handle_info/3,
+	   terminate/3,
+	   code_change/3]).
+	
+	-define(SERVER, ?MODULE).
+	
+	
+	------------------------------------------------------
+	
+	start_link(Name, Tr, InitVal) ->   
+	  tgen_server:start_link({local, Name}, ?MODULE, InitVal, Tr, []).
+	
+	start_link(Tr, InitVal) ->
+	   tgen_server:start_link(?MODULE, InitVal, Tr, []).
+	
+	
+	set_value(Pid, Tr, Value) ->
+	   tgen_server:call(Pid, Tr, {set_value, Value}).
+	
+	get_value(Pid, Tr) ->
+	   tgen_server:call(Pid, Tr, get_value).
+	
+	start_from(Pid, Tr, Value) ->
+	   tgen_server:call(Pid, Tr, {start_from, Value}).
+	
+	stop(Pid, Tr) ->
+	   tgen_server:stop(Pid, Tr).
+	
+	
+	
+	init(_Tr, InitVal) ->
+	   {ok, InitVal}.
+	
+	
+	handle_call(_Tr, {set_value, Value}, _From, _State) ->
+	   {reply, ok, Value};
+	
+	handle_call(Tr, {start_from, Value}, _From, _State) ->
+	   NewPid = start_link(Tr, Value),
+	   {reply, NewPid, Value};
+	
+	handle_call(_Tr, get_value, _From, State) ->
+	   {reply, State, State}.
+	
+	handle_info(_Tr,_Info, State) ->
+	   {noreply, State}.
+	
+	terminate(_Tr, _Reason, _State) ->
+	   ok.
+	
+	code_change(_OldVsn, State, _Extra) ->
+	   {ok, State}.
 
 ## пример клиентского кода ##
 
 
 создание локального процесса зарегистрированного как о1 с начальным значением 0 
-   >Tr1 = transaction:start(),
-   >tgen_sampl:start_link(o1, Tr1, 0),
-   >transaction:commit(Tr1),
+	Tr1 = transaction:start(),
+	tgen_sampl:start_link(o1, Tr1, 0),
+	transaction:commit(Tr1),
    
 создаем контексты двух транзакций типа record_version no_wait no_overwrite
 
-   >Tr2 = transaction:start(),
-   >Tr3 = transaction:start(),
+	Tr2 = transaction:start(),
+	Tr3 = transaction:start(),
 
 В контексте транзакции Tr3 считываем значение состояния в переменную V0 (значение 0)
-   >V0 = tgen_sampl:get_value(o1, Tr3),
+	V0 = tgen_sampl:get_value(o1, Tr3),
 
 В контексте транзакции Tr2 изменяем состояние в процессе на 1
-   >SetV = 1,
-   >tgen_sampl:set_value(o1, Tr2, SetV),
+	SetV = 1,
+	tgen_sampl:set_value(o1, Tr2, SetV),
 
 В контексте транзакции Tr3 считываем значение состояния в переменную V1. Считывается 0, потому что это последнее подтвержденное значение, которое видит Tr3. Транзакция Tr3 не видит неподтвержденных изменений от транзакции Tr2. 
-   >V1 = tgen_sampl:get_value(o1, Tr3),
-   >?assert(V0 =:= V1),
+	V1 = tgen_sampl:get_value(o1, Tr3),
+	?assert(V0 =:= V1),
 
 Подтверждаем изменения от транзакции Tr2
-   >transaction:commit(Tr2),
+	transaction:commit(Tr2),
 
 В контексте транзакции Tr3 опять считываем значение состояния в переменную V2. Считывается 1, потому что теперь это последнее подтвержденное значение, которое видит Tr3. Транзакция Tr3  теперь видит подтвержденные изменения от транзакции Tr2. 
-   >V2 = tgen_sampl:get_value(o1, Tr3),
-   >?assert(SetV =:= V2),
+	V2 = tgen_sampl:get_value(o1, Tr3),
+	?assert(SetV =:= V2),
 
 Команда на останов процесса 
-   >tgen_sampl:stop(o1, Tr3),
+	tgen_sampl:stop(o1, Tr3),
 
 Подтверждение останова
-   >transaction:commit(Tr3).
+	transaction:commit(Tr3).
