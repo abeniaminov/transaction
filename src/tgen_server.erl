@@ -50,8 +50,8 @@
 -type overwrite() :: boolean().
 -type lock_result() :: 'deadlock' | 'busy' | 'lose'|  'ok'.
 -type transaction() :: #{tr_id => reference(), tr_bet => integer(), i_level => version_level(), wait => wait(), overwrite => overwrite()}.
-
--export_type([version_level/0, wait/0, overwrite/0, transaction/0, lock_result/0]).
+-type tr_options() :: #{i_level => version_level(), wait => wait(), overwrite => overwrite()}.
+-export_type([version_level/0, wait/0, overwrite/0, transaction/0, lock_result/0, tr_options/0]).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
@@ -69,17 +69,21 @@
     {noreply, NewState :: term(), timeout() | hibernate} |
     {stop, Reason :: term(), Reply :: term(), NewState :: term()} |
     {stop, Reason :: term(), NewState :: term()}.
+
 -callback handle_info(Tr :: transaction(), Info :: timeout | term(), State :: term()) ->
     {noreply, NewState :: term()} |
     {noreply, NewState :: term(), timeout() | hibernate} |
     {stop, Reason :: term(), NewState :: term()}.
+
 -callback terminate(Tr :: transaction(), Reason :: (normal | shutdown | {shutdown, term()} |
 term()),
         State :: term()) ->
     term().
+
 -callback code_change(OldVsn :: (term() | {down, term()}), State :: term(),
         Extra :: term()) ->
     {ok, NewState :: term()} | {error, Reason :: term()}.
+
 -callback format_status(Opt, StatusData) -> Status when
     Opt :: 'normal' | 'terminate',
     StatusData :: [PDict | State],
@@ -223,7 +227,7 @@ gambler_bm() ->
         {bm, BmTrID, BmBet, BmClient} ->
             gambler_fm({bm, BmTrID, BmBet, BmClient});
         stop ->
-            flush_gambler(),
+            %flush_gambler(),
             stopped
 
     end.
@@ -244,7 +248,7 @@ gambler_fm({bm, BmTrID, BmBet, BmClient}) ->
             end,
             gambler_fm({bm, BmTrID, BmBet, BmClient});
         stop ->
-            flush_gambler(),
+            %flush_gambler(),
             stopped
     end.
 
@@ -394,16 +398,16 @@ handle_call({#{tr_id := TrID} = _Tr, _Request},
 
 handle_call({#{tr_id := TrID, tr_bet := Bet, overwrite := OWrite} = Tr, Request},
         {From, Ref}, #{tr_state := committed, module := Mod, committed_tid := CTID} = State) ->
-    Latest_CTID = case OWrite of
-                        true -> CTID;
-                        false -> get_latest_CTID(TrID, CTID)
-                  end,
     CommmittedVState = maps:get(CTID, State),
     Res1 = Mod:handle_call(Tr, Request, {From, Ref}, CommmittedVState),
     {Reply, NewVState} = get_result_state(Res1),
     NewState = case NewVState =/= CommmittedVState of
                    true ->
-                       case CTID =/= Latest_CTID of
+                       Latest_CTID = case OWrite of
+                                         true -> CTID;
+                                         false -> get_latest_CTID(TrID, CTID)
+                                     end,
+                       case  CTID =/= Latest_CTID of
                            true ->
                                set_result(Res1, lose, State);
                            false ->
