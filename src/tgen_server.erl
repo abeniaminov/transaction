@@ -48,7 +48,7 @@
 -type version_level() :: record_version |no_record_version.
 -type wait() :: wait | no_wait.
 -type overwrite() :: boolean().
--type lock_result() :: 'deadlock' | 'busy' | 'lose'|  'ok'.
+-type lock_result() :: 'deadlock' | 'busy' | 'lost'|  'ok'.
 -type transaction() :: #{tr_id => reference(), tr_bet => integer(), i_level => version_level(), wait => wait(), overwrite => overwrite()}.
 -type tr_options() :: #{i_level => version_level(), wait => wait(), overwrite => overwrite()}.
 -export_type([version_level/0, wait/0, overwrite/0, transaction/0, lock_result/0, tr_options/0]).
@@ -127,7 +127,7 @@ lock(Res, Pid, Tr) ->
     case Res of
         deadlock -> deadlock;
         busy -> busy;
-        lose -> lose;
+        lost -> lost;
         _ ->  lock(Pid, Tr)
     end.
 
@@ -160,7 +160,7 @@ call(Res, Pid, Tr, Request) ->
     case Res of
         deadlock -> deadlock;
         busy -> busy;
-        lose -> lose;
+        lost -> lost;
         _ ->  call(Pid, Tr, Request)
     end.
 
@@ -409,7 +409,7 @@ handle_call({#{tr_id := TrID, tr_bet := Bet, overwrite := OWrite} = Tr, Request}
                                      end,
                        case  CTID =/= Latest_CTID of
                            true ->
-                               set_result(Res1, lose, State);
+                               set_result(Res1, lost, State);
                            false ->
                                transaction:write_transaction_log(Tr, self()),
                                set_result(Res1, Reply, State#{tr_state => active, active_bet => Bet, client_pid => From, active_tid => TrID, TrID => NewVState})

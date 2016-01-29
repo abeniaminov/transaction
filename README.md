@@ -1,4 +1,4 @@
-# The transaction application #
+# The transaction application
 
 
 __Authors:__ Alexander Beniaminov ([`abeniaminov@gmail.com`](mailto:abeniaminov@gmail.com))
@@ -25,16 +25,17 @@ Smart and efficient deadlock resolution algorithm was designed by Manuel Prieto,
 
 About [MVCC](https://en.wikipedia.org/w/index.php?title=Multiversion_concurrency_control&oldid=701098838) and [isolation levels](https://en.wikipedia.org/wiki/Isolation_(database_systems)) can be read at Wikipedia 
 
+## Preamble
 
 
-
-## Using transaction ##
+## Using transaction 
 
 Call 'application:start(transaction)' on each node where you plan to use processes with tgen_server behaivour.
-Transaction mast be started before any action with tgen_server:
+Before any action with tgen_server process, client must obtain transaction context by call
 
 	Tr1 = transaction:start(Options).
 
+  
 Options is a map of type:
 
 	-type tr_options() :: #{i_level => version_level(), wait => wait(), overwrite => overwrite()}.
@@ -51,12 +52,54 @@ OR you call one of the functions
 	Tr = transaction:start_nw(). %% no_record_version, wait, no overwrite
 	Tr = transaction:start_nwo(). %% no_record_version, wait, overwrite
 
-## Structure of transaction ##
+These functions returns map() with five elements: 
+* tr_id - unique transaction id, has reference type
+* tr_bet - integer, the bet from transaction for deadlock-resolving algorithm
+* other three are options of transaction
+
+
+## Transaction API
+
+    transaction:commit(Tr).
+
+The coordinated transfer of all processes from active to committed state. All changes of all processes that made in the context of the transaction Tr, will be saved. All processes are started or stopped in the context of this transaction, will be respectively alive or be stopped.
+  
+    transaction:rollback(Tr).
+
+The coordinated transfer of all processes from active to committed state. All changes of all processes that made in the context of the transaction Tr, will be roll back. All processes are started or stopped in the context of this transaction, will be respectively stoped or be alive with last committed state.
+
+    transaction:set_locks(Tr, L)
+
+Trying to transfer to the active state all the processes in the list L. Returns ok, if it's able to do, busy or deadlock, if not managed. 
+
+## tgen_server API
+tgen_server is gen_server like behaviour. 
+
+    start(Mod, Args, Tr, Options)
+    start(Name, Mod, Args, Tr, Options)
+    start_link(Mod, Args, Tr, Options)
+    start_link(Name, Mod, Args, Tr, Options)
+There are analog of start and start_link functions of gen_server. The only difference is parameter Tr. I think you've guessed, it's transaction contexts. The tgen_server process calls Module:init/2 to initialize.
 
 
 
+    lock(Pid, Tr)
+Attempt to change to the active state the processes with pid Pid. Returns ok, if it's able to do, busy or deadlock, if not managed.
+    
+    stop(Pid, Tr)
+Attempt to stop process with pid Pid. Actually the process  transfer to state "stopping", rather then stop really. Process stops only after transaction commit. If transaction is rolled back, the process transfer to previously committed state. The tgen_server will call Module:terminate/3 before exiting.  
 
-## Приложение transaction ##.
+    call(Pid, Tr, Request)
+Makes a synchronous call to the tgen_server ServerRef by sending a request and waiting until a reply arrives. Second parameter is transaction context. The tgen_server will call Module:handle_call/4 to handle the request.
+
+## callback functions
+	init(Tr, Args)
+	handle_call(Tr, Request, From, State)
+	terminate(Tr, Reason, State)
+
+This is analogous to the callback functions of gen_server. First parameter is transaction context.
+
+## Приложение transaction
 Приложение поддерживающее транзакции для процессов типа gen_server 
 
 
@@ -108,9 +151,9 @@ tgen_server процесс  переходит из committed в active, ког�
 
 	overwrite (true or false)
 Параметр транзакции определяющий, допустим ли dirty update.  Описание проблемы можно прочитать, например, у [Джо Армстронга](http://armstrongonsoftware.blogspot.ru/2006/09/pure-and-simple-transaction-memories.html).   
-Предположим, что в контексте транзакции с номером 269 было прочтено последнее, подтвержденное транзакцией с номером 85, состояние некоторого процесса. После этого в контексте транзакции с номером 290 были произведены изменения состояния этого процесса и подтверждены. Теперь транзакция 269 пытается изменить состояние процесса на основе данных 85-ой транзакции. Параметр overwrite  true позволяет это сделать, в false клиенту возвращается, что он опоздал (lose).
+Предположим, что в контексте транзакции с номером 269 было прочтено последнее, подтвержденное транзакцией с номером 85, состояние некоторого процесса. После этого в контексте транзакции с номером 290 были произведены изменения состояния этого процесса и подтверждены. Теперь транзакция 269 пытается изменить состояние процесса на основе данных 85-ой транзакции. Параметр overwrite  true позволяет это сделать, в false клиенту возвращается, что он опоздал (lost).
 
-## API transaction ##
+## API transaction
 
 Функции создания уникальной транзакции 
 
@@ -139,7 +182,7 @@ tgen_server процесс  переходит из committed в active, ког�
 Попытка перевести в состояние active все процессы из списка L. Возвращает ok, если это удалось сделать, busy или deadlock, если не удалось. При этом часть процессов может остаться в состоянии active. Решать, что делать дальше  остается на усмотрение клиента. 
 
 
-## API tgen_server ##
+## API tgen_server
 
 	tgen_server:start(Mod, Args, Tr, Options).
 	tgen_server:start(Name, Mod, Args, Tr, Options). 
@@ -160,23 +203,25 @@ tgen_server процесс  переходит из committed в active, ког�
 	   case Res of
 	       deadlock -> deadlock;
 	       busy -> busy;
-	       lose -> lose;
+	       lost -> lost;
 	       _ ->  lock(Pid, Tr)
 	   end.
 
+ 
 
 	tgen_server:stop(Pid,  Tr)
+	
 Попытка остановить процесс. На самом деле процесс не останавливается, а переходит в состояние stopping. Если в дальнейшем транзакция подтверждается, то процесс останавливается, если транзакция отменяется, то процесс переходит в предыдущее закоммиченное состояние. В процессе останова вызывается функция обратного вызова terminate
 
 
 	tgen_server:call(Pid, Tr, Request)
 Аналог call функции gen_server, второй параметр - это контекст транзакции, в котором должна выполниться эта функция.
 
-Возвращает результат запроса к серверу, если все в порядке; busy,если процесс занят; deadlock,если попал в ситуацию взаимной блокировки и проиграл в процессе её разрешения; lose, если попал в ситуацию dirty update. Вызывается функция обратного вызова handle_call
+Возвращает результат запроса к серверу, если все в порядке; busy,если процесс занят; deadlock,если попал в ситуацию взаимной блокировки и проиграл в процессе её разрешения; lost, если попал в ситуацию dirty update. Вызывается функция обратного вызова handle_call
 
 В tgen_server не поддерживаются асинхронные вызовы типа cast, поэтому не требуются функции обратного вызова handle_cast
 
-## функции обратного вызова ##
+## функции обратного вызова
 
 	init(Tr, Args)
 	handle_call(Tr, Request, From, State)
@@ -185,7 +230,7 @@ tgen_server процесс  переходит из committed в active, ког�
 аналоги соответствующих функций gen_server, первый параметр - контекст вызывающей транзакции.
 
 
-## пример tgen_server ## 
+## пример tgen_server
 
 Простейший tgen_server процесс, который умеет хранить и отдавать целиком произвольный erlang терм. А еще умеет запускать еще один такой процесс в контексте транзакции.   
 	
@@ -253,7 +298,7 @@ tgen_server процесс  переходит из committed в active, ког�
 	code_change(_OldVsn, State, _Extra) ->
 	   {ok, State}.
 
-## пример клиентского кода ##
+## пример клиентского кода
 
 
 создание локального процесса зарегистрированного как о1 с начальным значением 0 
@@ -297,3 +342,4 @@ tgen_server процесс  переходит из committed в active, ког�
 Подтверждение останова
 
 	transaction:commit(Tr3).
+
