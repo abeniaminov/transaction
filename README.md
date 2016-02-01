@@ -119,7 +119,8 @@ This is analogous to the callback functions of gen_server. First parameter is tr
  
 Все действия с tgen_server процессом должны производиться в контексте какой-нибудь транзакции.
 
-Транзакция запускается одной из функцией: 
+Транзакция запускается одной из функцией:
+
 	Tr = transaction:start(). %% record_version, no_wait, no overwrite
 	Tr = transaction:start_o(). %% record_version, no_wait, overwrite
 	Tr = transaction:start_n(). %% no_record_version, no_wait, no overwrite
