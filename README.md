@@ -20,7 +20,7 @@ This application is inspired on MVCC algorithms and ideas, belonging to [David P
 
 
 Smart and efficient deadlock resolution algorithm was designed by Manuel Prieto, Jesús Villadangos, Federico Fariña, Alberto Córdoba, Dept. de Matemática e Informática Universidad Pública de Navarra.
-[“An O(n) distributed deadlock resolution algorithm”](http://www.gsd.unavarra.es/gsd/files/spora/pdp20061.pdf)
+[“An O(n) distributed deadlock resolution algorithm”](https://pdfs.semanticscholar.org/54cd/9b7de8d0cbfe6c98c43b063bcceec3f0c985.pdf)
 
 
 About [MVCC](https://en.wikipedia.org/w/index.php?title=Multiversion_concurrency_control&oldid=701098838) and [isolation levels](https://en.wikipedia.org/wiki/Isolation_(database_systems)) can be read at Wikipedia 
