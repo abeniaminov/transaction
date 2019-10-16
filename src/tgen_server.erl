@@ -8,11 +8,10 @@
 
 %%%-------------------------------------------------------------------
 %%% @author Alexander Beniaminov
-%%% @copyright (C) 2015,
+%%% @copyright (C) 2016,
 %%% @doc
 %%%
 %%% @end
-%%% Created : 16. Окт. 2015 12:33
 %%%-------------------------------------------------------------------
 %%=============================================================================
 %% @doc Transaction gen_server behaviour
@@ -28,7 +27,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start/4, start/5, start_link/4, start_link/5, stop/2]).
+-export([start/4, start/5, start_link/4, start_link/5, stop/2, stop/3]).
 
 -export([lock/2, lock/3]).
 
@@ -45,13 +44,15 @@
 -export([gambler_bm/0, gambler_fm/1]).
 
 
--type version_level() :: record_version |no_record_version.
--type wait() :: wait | no_wait.
+-type version_level() :: 'record_version' | 'no_record_version'.
+-type tr_state() :: 'committed' | 'active' | 'stopping' | 'starting'.
+-type wait() :: 'wait' | 'no_wait'.
 -type overwrite() :: boolean().
+-type commit_phase() :: 0 | 1.
 -type lock_result() :: 'deadlock' | 'busy' | 'lost'|  'ok'.
 -type transaction() :: #{tr_id => reference(), tr_bet => integer(), i_level => version_level(), wait => wait(), overwrite => overwrite()}.
 -type tr_options() :: #{i_level => version_level(), wait => wait(), overwrite => overwrite()}.
--export_type([version_level/0, wait/0, overwrite/0, transaction/0, lock_result/0, tr_options/0]).
+-export_type([version_level/0, wait/0, overwrite/0, transaction/0, lock_result/0, tr_options/0, tr_state/0, commit_phase/0]).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
@@ -69,6 +70,18 @@
     {noreply, NewState :: term(), timeout() | hibernate} |
     {stop, Reason :: term(), Reply :: term(), NewState :: term()} |
     {stop, Reason :: term(), NewState :: term()}.
+
+-callback before_commit(Tr :: transaction(), From :: {pid(), Tag :: term()}, TRState :: tr_state(),  State :: term()) ->
+    boolean().
+
+-callback before_rollback(Tr :: transaction(), From :: {pid(), Tag :: term()}, TRState :: tr_state(), CommitPhase :: integer(), State :: term()) ->
+    boolean().
+
+-callback after_commit(Tr :: transaction(), From :: {pid(), Tag :: term()}, TRState :: tr_state(), State :: term()) ->
+    term().
+
+-callback after_rollback(Tr :: transaction(), From :: {pid(), Tag :: term()}, TRState :: tr_state(), State :: term()) ->
+    term().
 
 -callback handle_info(Tr :: transaction(), Info :: timeout | term(), State :: term()) ->
     {noreply, NewState :: term()} |
@@ -96,7 +109,7 @@ term()),
 
 %% @doc Start tgen_server process.
 %%
-%% There are start and start_link functions similar to the gen_server but
+%% There are start and start_link functions similar to the gen_server
 %% with additional parameter Tr - transaction::transaction()
 %%
 %% @end
@@ -124,12 +137,7 @@ start_link(Name, Mod, Args, Tr, Options) ->
 %%
 %% @end
 lock(Res, Pid, Tr) ->
-    case Res of
-        deadlock -> deadlock;
-        busy -> busy;
-        lost -> lost;
-        _ ->  lock(Pid, Tr)
-    end.
+    call(Res,Pid,Tr, lock).
 
 
 -spec lock(pid(), transaction()) -> lock_result().
@@ -143,6 +151,10 @@ lock(Res, Pid, Tr) ->
 lock(Pid, Tr) ->
     call(Pid, Tr, lock).
 
+
+
+stop(Res, Pid,  Tr ) ->
+    call(Res, Pid, Tr, stop).
 
 
 stop(Pid,  Tr) ->
@@ -161,6 +173,7 @@ call(Res, Pid, Tr, Request) ->
         deadlock -> deadlock;
         busy -> busy;
         lost -> lost;
+        disconected -> disconected;
         _ ->  call(Pid, Tr, Request)
     end.
 
@@ -174,7 +187,7 @@ call(Res, Pid, Tr, Request) ->
 %% @end
 call(Pid, #{tr_id := TrID, tr_bet := Bet} = Tr, Request) ->
     flush_unlock(),
-    R = gen_server:call(Pid, {Tr, Request}),
+    R = (catch gen_server:call(Pid, {Tr, Request})),
     case R of
         locked ->
             receive
@@ -182,7 +195,8 @@ call(Pid, #{tr_id := TrID, tr_bet := Bet} = Tr, Request) ->
                     call(Pid, Tr, Request)
             after  ?DEADLOCK_TIMEOUT ->
                 {atid, ATID, ActiveClPid, ActiveBet} = gen_server:call(Pid, get_atid),
-                GamblerPid = case ActiveBet < Bet of
+                GamblerPid =
+                case ActiveBet < Bet of
                     true ->
                         GPid = spawn(?MODULE, gambler_bm, []),
                         ActiveClPid ! {fm, TrID, Bet, self()},
@@ -200,7 +214,7 @@ call(Pid, #{tr_id := TrID, tr_bet := Bet} = Tr, Request) ->
                             gambler_stop(GamblerPid),
                             flush_gambler(),
                             call(Pid, Tr, Request);
-                        you_lost ->
+                        you_lose ->
                             gambler_stop(GamblerPid),
                             transaction:rollback(Tr),
 
@@ -211,8 +225,14 @@ call(Pid, #{tr_id := TrID, tr_bet := Bet} = Tr, Request) ->
                 end()
 
             end;
+        in_limbo ->
+            timer:sleep(?DEADLOCK_TIMEOUT),
+            call(Pid, Tr, Request);
+        {'EXIT', _Reason} ->
+            disconnected;
         _ -> R
     end.
+
 
 gambler_stop(GamblerPid) ->
     case is_process_alive(GamblerPid) of
@@ -243,7 +263,7 @@ gambler_fm({bm, BmTrID, BmBet, BmClient}) ->
                 FmBet < BmBet ->
                     FmClient ! {bm, BmTrID, BmBet, BmClient};
                 FmBet == BmBet ->
-                    BmClient ! you_lost
+                    BmClient ! you_lose
 
             end,
             gambler_fm({bm, BmTrID, BmBet, BmClient});
@@ -271,9 +291,11 @@ init([Mod, Args, ClPid, #{tr_id := TrID, tr_bet := Bet} = Tr]) ->
         tr_state => starting,
         active_tid => TrID,
         active_bet => Bet,
-        client_pid => ClPid,
+        active_client_pid => ClPid,
         committed_tid => TrID,
-        module => Mod},
+        module => Mod,
+        commit_phase => 0,
+        monitor_ref => erlang:monitor(process, ClPid)},
     case Mod:init(Tr, Args) of
         {ok, State} ->
             transaction:write_transaction_log(Tr, self()),
@@ -290,21 +312,44 @@ init([Mod, Args, ClPid, #{tr_id := TrID, tr_bet := Bet} = Tr]) ->
     end.
 
 
-handle_call(get_atid, _From, #{active_tid := ATID, active_bet := Bet, client_pid := ClPid} = State) ->
+handle_call(get_atid, _From, #{active_tid := ATID, active_bet := Bet, active_client_pid := ClPid} = State) ->
     {reply, {atid, ATID, ClPid, Bet }, State};
 
-handle_call({Tr, commit}, _From, State) ->
-    CommitedState = commit_by_context(Tr, State),
-    case maps:get(tr_state, CommitedState) of
+handle_call({Tr, commit_1}, From, #{module := Mod,  tr_state := TRState, active_tid := ATID} = State) ->
+    ActiveVState = maps:get(ATID, State),
+    R = Mod:before_commit(Tr, From, TRState, ActiveVState),
+    NewState = case R of
+                 true ->  State#{commit_phase => 1};
+                 false -> State
+               end,
+    {reply, R, NewState };
+
+
+
+
+handle_call({Tr, commit_2}, From,
+        #{module := Mod,  tr_state := TRState, committed_tid := CTID, monitor_ref := MonitorRef} = State) ->
+    CommittedState = commit_by_context(Tr, State),
+    demonitor_client(MonitorRef),
+    CommmittedVState = maps:get(CTID, State),
+    Mod:after_commit(Tr, From, TRState, CommmittedVState),
+    case maps:get(tr_state, CommittedState) of
         stopping ->
-            {stop, normal, ok,  CommitedState};
+            {stop, normal, ok,  CommittedState};
         _ ->
-            {reply, ok, CommitedState}
+            {reply, ok, CommittedState}
     end;
 
 
-handle_call({Tr, rollback}, _From, State) ->
+handle_call({Tr, rollback}, {From, _Ref},
+        #{module := Mod, tr_state := TRState, commit_phase := CommitPhase,
+            active_tid := ATID, committed_tid := CTID, monitor_ref := MonitorRef } = State) ->
+    ActiveVState = maps:get(ATID, State),
+    Mod:before_rollback(Tr, From, TRState, CommitPhase, ActiveVState),
     RolledBackState = rollback_by_context(Tr, State),
+    CommmittedVState = maps:get(CTID, State),
+    Mod:after_rollback(Tr, From, TRState,  CommmittedVState),
+    demonitor_client(MonitorRef),
     case maps:get(tr_state, RolledBackState) of
         stopping ->
             {stop, normal, ok, RolledBackState};
@@ -317,7 +362,9 @@ handle_call({Tr, rollback}, _From, State) ->
 handle_call({#{tr_id := TrID, tr_bet := Bet} = Tr, lock},
         {From, _Ref}, #{tr_state := committed, module := _Mod, committed_tid := CTID} = State) ->
     CommmittedVState = maps:get(CTID, State),
-    NewState = State#{tr_state => active, active_bet => Bet, client_pid => From, active_tid => TrID, TrID => CommmittedVState},
+    ClientRef = erlang:monitor(process, From),
+    NewState = State#{tr_state => active, active_bet => Bet, active_client_pid => From,
+        active_tid => TrID, TrID => CommmittedVState, monitor_ref => ClientRef},
     transaction:write_transaction_log(Tr, self()),
     {reply, ok, NewState};
 
@@ -349,8 +396,9 @@ handle_call({#{tr_id := TrID, i_level := IL, wait := W} = _Tr, lock},
 
 
 handle_call({#{tr_id := TrID} = Tr, stop},
-        _From, #{tr_state := committed} = State) ->
-    NewState = State#{tr_state => stopping, active_tid => TrID },
+        {From, _Tag}, #{tr_state := committed} = State) ->
+    ClientRef = erlang:monitor(process, From),
+    NewState = State#{tr_state => stopping, active_tid => TrID, monitor_ref => ClientRef},
     transaction:write_transaction_log(Tr, self()),
     {reply, ok, NewState};
 
@@ -389,10 +437,7 @@ handle_call({#{tr_id := TrID, i_level := no_record_version,  wait := wait} = _Tr
     {reply, locked, State};
 
 
-handle_call({#{tr_id := TrID} = _Tr, _Request},
-        _From, #{tr_state := starting, active_tid := ATID} = State)
-    when TrID =/= ATID ->
-    {reply, busy, State};
+
 
 
 
@@ -401,30 +446,35 @@ handle_call({#{tr_id := TrID, tr_bet := Bet, overwrite := OWrite} = Tr, Request}
     CommmittedVState = maps:get(CTID, State),
     Res1 = Mod:handle_call(Tr, Request, {From, Ref}, CommmittedVState),
     {Reply, NewVState} = get_result_state(Res1),
-    NewState = case NewVState =/= CommmittedVState of
-                   true ->
-                       Latest_CTID = case OWrite of
-                                         true -> CTID;
-                                         false -> get_latest_CTID(TrID, CTID)
-                                     end,
-                       case  CTID =/= Latest_CTID of
-                           true ->
-                               set_result(Res1, lost, State);
-                           false ->
-                               transaction:write_transaction_log(Tr, self()),
-                               set_result(Res1, Reply, State#{tr_state => active, active_bet => Bet, client_pid => From, active_tid => TrID, TrID => NewVState})
-                       end;
-                   false ->
+    NewState = case NewVState of
+                   CommmittedVState ->
                        case OWrite of
                            true -> continue;
                            false -> transaction:write_reading_log(TrID, self(), CTID)
                        end,
-                       set_result(Res1, Reply, State)
+                       set_result(Res1, Reply, State);
+                   _ ->
+                       Latest_CTID = case OWrite of
+                                         true -> CTID;
+                                         false -> get_latest_CTID(TrID, CTID)
+                                     end,
+                       case  CTID  of
+                           Latest_CTID ->
+                               ClientRef = erlang:monitor(process, From),
+                               transaction:write_transaction_log(Tr, self()),
+                               set_result(Res1, Reply,
+                                   State#{tr_state => active, active_bet => Bet, active_client_pid => From,
+                                       active_tid => TrID, TrID => NewVState, monitor_ref => ClientRef});
+                           _ ->
+                               set_result(Res1, lost, State)
+
+                       end
+
                    end,
     NewState;
 
 handle_call({#{tr_id := TrID} = Tr, Request},
-        From, #{tr_state := TrSt, active_tid := ATID, module := Mod} = State)
+        From, #{tr_state := TrSt,  active_tid := ATID, module := Mod} = State)
     when
         TrID =:= ATID, TrSt =:= active;
         TrID =:= ATID, TrSt =:= starting ->
@@ -434,6 +484,25 @@ handle_call({#{tr_id := TrID} = Tr, Request},
     NewState = State#{ATID => NewVersion},
     set_result(Res1, Reply, NewState);
 
+
+
+
+%% Detect process is between first and second phase of commit or rollback transaction
+handle_call({#{tr_id := TrID} = _Tr, _Request},
+        _From, #{tr_state := TrSt, commit_phase := 1, active_tid := ATID} = State)
+    when
+    TrID =/= ATID, TrSt =:= starting;
+    TrID =/= ATID, TrSt =:= active;
+    TrID =/= ATID, TrSt =:= stopping ->
+    {reply, in_limbo, State};
+
+
+
+handle_call({#{tr_id := TrID} = _Tr, _Request},
+        _From, #{tr_state := starting, active_tid := ATID} = State)
+    when TrID =/= ATID ->
+    {reply, busy, State};
+
 handle_call({#{tr_id := TrID, i_level := record_version, wait := _W , overwrite := OWrite} = Tr,  Request},
         From, #{tr_state := TrSt, committed_tid := CTID, active_tid := ATID, module := Mod} = State)
     when
@@ -442,15 +511,15 @@ handle_call({#{tr_id := TrID, i_level := record_version, wait := _W , overwrite 
     CommmittedVState = maps:get(CTID, State),
     Res1 = Mod:handle_call(Tr, Request, From, CommmittedVState),
     {Reply, NewVState} = get_result_state(Res1),
-    case NewVState =/= CommmittedVState of
-        true ->
-            set_result(Res1, busy, State);
-        false ->
+    case NewVState of
+        CommmittedVState ->
             case OWrite of
                 true -> continue;
                 false -> transaction:write_reading_log(TrID, self(), CTID)
             end,
-            set_result(Res1, Reply, State)
+            set_result(Res1, Reply, State);
+        _ ->
+            set_result(Res1, busy, State)
     end;
 
 handle_call({#{tr_id := TrID, i_level := no_record_version, wait := no_wait} = _Tr,  _Request},
@@ -469,6 +538,12 @@ handle_call({#{tr_id := TrID, i_level := no_record_version, wait := wait} = _Tr,
 handle_cast(_R, State) ->
     {noreply, State}.
 
+
+
+handle_info({'DOWN', _, process, _, _}, #{committed_tid := CTID, module := Mod} = State) ->
+    CommittedVState = maps:get(CTID, State),
+    {noreply, #{tr_state => committed, active_bet => none, active_client_pid => none, commit_phase => 0,
+        active_tid => 0, committed_tid => CTID, module => Mod, CTID => CommittedVState, monitor_ref => none}};
 
 handle_info({Tr, Info}, #{module := Mod} = State) ->
     Mod:handle_info(Tr, Info, State),
@@ -497,7 +572,8 @@ commit_by_context(#{tr_id := TrID} = _Tr,
   when TrID =:= ATID, TrSt =:= active;
        TrID =:= ATID, TrSt =:= starting ->
     ActiveVState = maps:get(ATID, State),
-    #{tr_state => committed, active_bet => none, client_pid => none, active_tid => 0, committed_tid => TrID, module => Mod, TrID => ActiveVState};
+    #{tr_state => committed, active_bet => none, active_client_pid => none, commit_phase => 0,
+        active_tid => 0, committed_tid => TrID, module => Mod, TrID => ActiveVState, monitor_ref => none};
 
 commit_by_context(#{tr_id := TrID} = _Tr, #{tr_state := active, active_tid := ATID} = State)
     when  TrID =/= ATID ->
@@ -509,11 +585,12 @@ commit_by_context(#{tr_id := _TrID} = _Tr, #{tr_state := committed} = State) ->
 
 rollback_by_context(#{tr_id := TrID} = _Tr, #{tr_state := TRState, active_tid := ATID, committed_tid := CTID, module := Mod} = State)
     when TRState =:= stopping, TrID =:= ATID, CTID =/= ATID ->
-    CommitedVState = maps:get(CTID, State),
-    #{tr_state => committed, active_bet => none, client_pid => none, active_tid => 0, committed_tid => CTID, module => Mod, CTID => CommitedVState};
+    CommittedVState = maps:get(CTID, State),
+    #{tr_state => committed, active_bet => none, active_client_pid => none, commit_phase => 0,
+        active_tid => 0, committed_tid => CTID, module => Mod, CTID => CommittedVState, monitor_ref => none};
 
 
-rollback_by_context(#{tr_id := TrID} = _Tr, #{tr_state := TRState, active_tid := ATID, committed_tid := CTID} = State)
+rollback_by_context(#{tr_id := TrID} = _Tr, #{tr_state := TRState,  active_tid := ATID, committed_tid := CTID} = State)
     when TRState =:= stopping, TrID =:= ATID, CTID =:= ATID ->
     State;
 
@@ -528,8 +605,9 @@ rollback_by_context(#{tr_id := TrID} = _Tr,
 rollback_by_context(#{tr_id := TrID} = _Tr,
         #{tr_state := active, active_tid := ATID, committed_tid := CTID, module := Mod} = State)
     when TrID =:= ATID ->
-    CommitedVState = maps:get(CTID, State),
-    #{tr_state => committed, active_bet => none, client_pid => none, active_tid => 0, committed_tid => CTID, module => Mod, CTID => CommitedVState};
+    CommittedVState = maps:get(CTID, State),
+    #{tr_state => committed, active_bet => none, active_client_pid => none, commit_phase => 0,
+        active_tid => 0, committed_tid => CTID, module => Mod, CTID => CommittedVState, monitor_ref => none};
 
 
 
@@ -575,3 +653,8 @@ flush_unlock() ->
             flush_unlock()
     after 0 -> ok
     end.
+
+
+demonitor_client(none) -> true;
+demonitor_client(Ref) when is_reference(Ref) ->
+    erlang:demonitor(Ref,[flush]).

@@ -41,6 +41,8 @@
     wait_subscribe/4,
     wait_unsubscribe/4]).
 
+-export([all_p/2, pforeach/2]).
+
 -define(SERVER, ?MODULE).
 
 
@@ -54,58 +56,87 @@ start_link() ->
 
 
 
+
+-spec start() -> tgen_server:transaction().
+%%
 start() ->
     TrID = get_next_id(),
     #{tr_id => TrID, tr_bet => get_bet(), i_level => record_version, wait => no_wait, overwrite => false}.
 
+-spec start_w() -> tgen_server:transaction().
+%%
 start_w() ->
     TrID = get_next_id(),
     #{tr_id => TrID, tr_bet => get_bet(), i_level => no_record_version, wait => wait, overwrite => false}.
 
+-spec start_nw() -> tgen_server:transaction().
+%%
 start_nw() ->
     TrID = get_next_id(),
     #{tr_id => TrID, tr_bet => get_bet(), i_level => no_record_version, wait => no_wait, overwrite => false}.
 
+-spec start_o() -> tgen_server:transaction().
+%%
 start_o() ->
     TrID = get_next_id(),
     #{tr_id => TrID, tr_bet => get_bet(), i_level => record_version, wait => no_wait, overwrite => true}.
 
+-spec start_wo() -> tgen_server:transaction().
+%%
 start_wo() ->
     TrID = get_next_id(),
     #{tr_id => TrID, tr_bet => get_bet(), i_level => no_record_version, wait => wait, overwrite => true}.
 
+-spec start_nwo() -> tgen_server:transaction().
+%%
 start_nwo() ->
     TrID = get_next_id(),
     #{tr_id => TrID, tr_bet => get_bet(), i_level => no_record_version, wait => no_wait, overwrite => true}.
 
 
 
--spec start(map()) -> map().
+-spec start(Options::tgen_server:tr_options()) -> tgen_server:transaction().
+%%
 start(Options) ->
     TrID = get_next_id(),
     maps:merge(#{tr_id => TrID, tr_bet => get_bet(), i_level => record_version, wait => no_wait, overwrite => false}, Options).
 
 
+-spec commit(Tr::gen_server:transaction()) -> commited | rolled_back.
+%%
 commit(#{tr_id := TrID} = Tr) when node(TrID) =/= node() ->
     trpc:apply(node(TrID), transaction, commit, [Tr]);
 commit(#{tr_id := TrID} = Tr) ->
     ChangedObjects = ets:lookup(write_log, Tr),
-    lists:foreach(fun(Object) -> commit_object(Object) end, ChangedObjects),
-    WaitingEndTransaction = remove_dups([{ClientPid, ConcurTr} || {_TrID, _ObjID, ClientPid, ConcurTr} <- ets:lookup(wait_log, TrID)]),
+    %io:fwrite("ChangedObjects size: ~p~n",[length(ChangedObjects)]),
+    R =  case all_p(fun(Object) -> commit_object1(Object) end, ChangedObjects) of % case true of %
+       true ->
+           lists:foreach(fun(Object) -> commit_object2(Object) end, ChangedObjects),
+           committed;
+       false ->
+           lists:foreach(fun(Object)  -> rollback_object(Object) end, ChangedObjects),
+           rolled_back
+    end,
+    WaitingEndTransaction = %remove_dups(
+               [{ClientPid, ConcurTr} || {_TrID, _ObjID, ClientPid, ConcurTr} <- ets:lookup(wait_log, TrID)], %),
     ok = broadcast_unlock(WaitingEndTransaction),
     flush_tr_log(Tr),
-    committed.
+    R.
 
+-spec rollback(Tr::gen_server:transaction()) -> rolled_back.
+%%
 rollback(#{tr_id := TrID} = Tr) when node(TrID) =/= node() ->
     trpc:apply(node(TrID), transaction, rollback, [Tr]);
 rollback(#{tr_id := TrID} = Tr) ->
     ChangedObjects = ets:lookup(write_log, Tr),
     lists:foreach(fun(Object) -> rollback_object(Object) end, ChangedObjects),
-    WaitingEndTransaction = remove_dups([{ClientPid, ConcurTr} || {_TrID, _ObjID, ClientPid, ConcurTr} <- ets:lookup(wait_log, TrID)]),
+    WaitingEndTransaction = %remove_dups(
+               [{ClientPid, ConcurTr} || {_TrID, _ObjID, ClientPid, ConcurTr} <- ets:lookup(wait_log, TrID)],%),
     ok = broadcast_unlock(WaitingEndTransaction),
     flush_tr_log(Tr),
     rolled_back.
 
+-spec set_locks(Tr::gen_server:transaction(), [pid()]) -> ok | busy | deadlock.
 set_locks(_Tr, []) -> ok;
 set_locks(Tr, [Pid | RestObjects]) ->
     case tgen_server:lock(Pid, Tr) of
@@ -157,16 +188,42 @@ get_next_id() ->
     make_ref().
 
 get_bet() ->
-    crypto:rand_uniform(0, 1000000).
-%erlang:unique_integer([positive, monotonic]).
+%    erlang:monotonic_time(nano_seconds).
+%    crypto:rand_uniform(0, 1000000).
+     erlang:unique_integer([positive, monotonic]).
+
+
+all(_F, []) -> true;
+all(F, [H|T]) ->
+    case F(H) of
+        true -> all(F, T);
+        false -> false
+    end.
+
+
+all_p(F, T) ->
+    all_l(pmap(F, T)).
+
+all_l([]) -> true;
+all_l([H|T]) when H ->
+    all_l(T);
+all_l(_T) -> false.
+
+
+
 
 
 %%====================================================================
-commit_object({Tr, Pid}) ->
-    gen_server:call(Pid, {Tr, commit}).
+commit_object1({Tr, Pid}) ->
+    gen_server:call(Pid, {Tr, commit_1}).
+
+commit_object2({Tr, Pid}) ->
+    gen_server:call(Pid, {Tr, commit_2}).
+
 
 rollback_object({Tr, Pid}) ->
     gen_server:call(Pid, {Tr, rollback}).
+
 
 
 flush_tr_log(#{tr_id := TrID} = Tr) when node(TrID) =/= node() ->
@@ -217,3 +274,26 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
+pmap(Function, List) ->
+    S = self(),
+    Pids = lists:map(fun(El) ->
+        spawn(fun() -> execute(S, Function, El) end)
+    end,
+        List),
+    gather(Pids).
+
+execute(Recv, Function, Element) ->
+    Recv ! {self(), Function(Element)}.
+
+gather([]) ->
+    [];
+gather([H|T]) ->
+    receive
+        {H, Ret} ->
+            [Ret|gather(T)]
+    end.
+
+pforeach(F, L) ->
+    lists:foreach(
+        fun(X) ->  spawn(fun() -> F(X) end) end, L
+    ).
