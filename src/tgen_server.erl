@@ -96,7 +96,13 @@
     | {stop, Reason :: term(), Reply :: term(), NewState :: term()}
     | {stop, Reason :: term(), NewState :: term()}.
 
--callback before_commit(Tr :: transaction(), From :: {pid(), Tag :: term()}, TRState :: tr_state(), State :: term()) ->
+-callback before_commit(
+  Tr :: transaction(),
+  From :: {pid(),
+      Tag :: term()},
+  TRState :: tr_state(),
+  State :: term()
+) ->
     boolean().
 
 -callback before_rollback(
@@ -108,13 +114,28 @@
 ) ->
     boolean().
 
--callback after_commit(Tr :: transaction(), From :: {pid(), Tag :: term()}, TRState :: tr_state(), State :: term()) ->
+-callback after_commit(
+  Tr :: transaction(),
+  From :: {pid(), Tag :: term()},
+  TRState :: tr_state(),
+  State :: term()
+) ->
     term().
 
--callback after_rollback(Tr :: transaction(), From :: {pid(), Tag :: term()}, TRState :: tr_state(), State :: term()) ->
+-callback after_rollback(
+  Tr :: transaction(),
+  From :: {pid(),
+      Tag :: term()},
+  TRState :: tr_state(),
+  State :: term()
+) ->
     term().
 
--callback handle_info(Tr :: transaction(), Info :: timeout | term(), State :: term()) ->
+-callback handle_info(
+  Tr :: transaction(),
+  Info :: timeout | term(),
+  State :: term()
+) ->
     {noreply, NewState :: term()}
     | {noreply, NewState :: term(), timeout() | hibernate}
     | {stop, Reason :: term(), NewState :: term()}.

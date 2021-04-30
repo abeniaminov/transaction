@@ -161,21 +161,17 @@ write_reading_log(TrID, ObjPid, CTID) when is_reference(TrID), node() =/= node(T
     trpc:apply(node(TrID), transaction, write_reading_log, [TrID, ObjPid, CTID]).
 
 wait_subscribe(TrID, ATID, ObjPid, WaitClientPid) when
-    is_reference(TrID), is_reference(ATID), node() =:= node(ATID)
-->
+    is_reference(TrID), is_reference(ATID), node() =:= node(ATID) ->
     ets:insert(wait_log, {ATID, ObjPid, WaitClientPid, TrID});
 wait_subscribe(TrID, ATID, ObjPid, WaitClientPid) when
-    is_reference(TrID), is_reference(ATID), node() =/= node(ATID)
-->
+    is_reference(TrID), is_reference(ATID), node() =/= node(ATID) ->
     trpc:apply(node(ATID), transaction, wait_subscribe, [TrID, ATID, ObjPid, WaitClientPid]).
 
 wait_unsubscribe(TrID, ATID, ObjPid, WaitClientPid) when
-    is_reference(TrID), is_reference(ATID), node() =:= node(ATID)
-->
+    is_reference(TrID), is_reference(ATID), node() =:= node(ATID) ->
     ets:delete_object(wait_log, {ATID, ObjPid, WaitClientPid, TrID});
 wait_unsubscribe(TrID, ATID, ObjPid, WaitClientPid) when
-    is_reference(TrID), is_reference(ATID), node() =/= node(ATID)
-->
+    is_reference(TrID), is_reference(ATID), node() =/= node(ATID) ->
     trpc:apply(node(ATID), transaction, wait_unsubscribe, [TrID, ATID, ObjPid, WaitClientPid]).
 
 read_reading_log(TrID, ObjPid) when is_reference(TrID), is_pid(ObjPid), node(TrID) =:= node() ->
