@@ -17,13 +17,13 @@
 %% ===================================================================
 
 start_link() ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
+  supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 %% ===================================================================
 %% Supervisor callbacks
 %% ===================================================================
 
 init([]) ->
-    {ok, { {one_for_one, 0, 10},
-	   [?CHILD(transaction, worker)]} }.
+  {ok, {{one_for_one, 0, 10},
+    [?CHILD(transaction, worker)]}}.
 

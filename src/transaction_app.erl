@@ -11,7 +11,7 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    transaction_sup:start_link().
+  transaction_sup:start_link().
 
 stop(_State) ->
-    ok.
+  ok.
