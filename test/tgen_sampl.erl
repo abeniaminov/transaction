@@ -16,17 +16,17 @@
 -export([start_link/3, start_link/2]).
 -export([set_value/3, get_value/2, stop/2, start_from/3]).
 
-
 %% gen_server callbacks
--export([init/2,
-  handle_call/4,
-  handle_cast/3,
-  handle_info/3,
-  terminate/3,
-  code_change/3]).
+-export([
+    init/2,
+    handle_call/4,
+    handle_cast/3,
+    handle_info/3,
+    terminate/3,
+    code_change/3
+]).
 
 -define(SERVER, ?MODULE).
-
 
 %%%===================================================================
 %%% API
@@ -38,27 +38,25 @@
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(start_link(atom(), tgen_sever:transaction(), term()) ->
-  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+-spec start_link(atom(), tgen_sever:transaction(), term()) ->
+    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}.
 start_link(Name, Tr, InitVal) ->
-  tgen_server:start_link({local, Name}, ?MODULE, InitVal, Tr, []).
+    tgen_server:start_link({local, Name}, ?MODULE, InitVal, Tr, []).
 
 start_link(Tr, InitVal) ->
-  tgen_server:start_link(?MODULE, InitVal, Tr, []).
-
+    tgen_server:start_link(?MODULE, InitVal, Tr, []).
 
 set_value(Pid, Tr, Value) ->
-  tgen_server:call(Pid, Tr, {set_value, Value}).
+    tgen_server:call(Pid, Tr, {set_value, Value}).
 
 get_value(Pid, Tr) ->
-  tgen_server:call(Pid, Tr, get_value).
+    tgen_server:call(Pid, Tr, get_value).
 
 start_from(Pid, Tr, Value) ->
-  tgen_server:call(Pid, Tr, {start_from, Value}).
+    tgen_server:call(Pid, Tr, {start_from, Value}).
 
 stop(Pid, Tr) ->
-  tgen_server:stop(Pid, Tr).
-
+    tgen_server:stop(Pid, Tr).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -71,9 +69,8 @@ stop(Pid, Tr) ->
 %%
 %%--------------------------------------------------------------------
 
-
 init(_Tr, InitVal) ->
-  {ok, InitVal}.
+    {ok, InitVal}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -84,15 +81,12 @@ init(_Tr, InitVal) ->
 %%--------------------------------------------------------------------
 
 handle_call(_Tr, {set_value, Value}, _From, _State) ->
-  {reply, ok, Value};
-
+    {reply, ok, Value};
 handle_call(Tr, {start_from, Value}, _From, _State) ->
-  NewPid = start_link(Tr, Value),
-  {reply, NewPid, Value};
-
-
+    NewPid = start_link(Tr, Value),
+    {reply, NewPid, Value};
 handle_call(_Tr, get_value, _From, State) ->
-  {reply, State, State}.
+    {reply, State, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -102,7 +96,7 @@ handle_call(_Tr, get_value, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_cast(_Tr, _Request, State) ->
-  {noreply, State}.
+    {noreply, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -110,7 +104,7 @@ handle_cast(_Tr, _Request, State) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_info(_Tr, _Info, State) ->
-  {noreply, State}.
+    {noreply, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -119,7 +113,7 @@ handle_info(_Tr, _Info, State) ->
 %%--------------------------------------------------------------------
 
 terminate(_Tr, _Reason, _State) ->
-  ok.
+    ok.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -131,7 +125,7 @@ terminate(_Tr, _Reason, _State) ->
 %%--------------------------------------------------------------------
 
 code_change(_OldVsn, State, _Extra) ->
-  {ok, State}.
+    {ok, State}.
 
 %%%===================================================================
 %%% Internal functions

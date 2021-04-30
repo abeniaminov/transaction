@@ -16,6 +16,7 @@ $RECYCLE.BIN/
 *.dump
 *.iml
 *.idea
+*_build
 
 # Windows shortcuts
 *.lnk
