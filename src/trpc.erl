@@ -31,8 +31,5 @@ apply(Node, Module, Fun, Args) when Node =/= node() ->
         {nodedown, Node} ->
             {error, nodedown}
     end;
-
 apply(Node, Module, Fun, Args) when Node =:= node() ->
-   erlang:apply(Module, Fun, Args).
-
-
+    erlang:apply(Module, Fun, Args).

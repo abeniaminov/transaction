@@ -16,17 +16,17 @@
 -export([start_link/3, start_link/2]).
 -export([set_value/3, get_value/2, stop/2, start_from/3]).
 
-
 %% gen_server callbacks
--export([init/2,
+-export([
+    init/2,
     handle_call/4,
     handle_cast/3,
     handle_info/3,
     terminate/3,
-    code_change/3]).
+    code_change/3
+]).
 
 -define(SERVER, ?MODULE).
-
 
 %%%===================================================================
 %%% API
@@ -38,14 +38,13 @@
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(start_link(atom(), tgen_sever:transaction(), term()) ->
-    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+-spec start_link(atom(), tgen_sever:transaction(), term()) ->
+    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}.
 start_link(Name, Tr, InitVal) ->
     tgen_server:start_link({local, Name}, ?MODULE, InitVal, Tr, []).
 
 start_link(Tr, InitVal) ->
     tgen_server:start_link(?MODULE, InitVal, Tr, []).
-
 
 set_value(Pid, Tr, Value) ->
     tgen_server:call(Pid, Tr, {set_value, Value}).
@@ -59,7 +58,6 @@ start_from(Pid, Tr, Value) ->
 stop(Pid, Tr) ->
     tgen_server:stop(Pid, Tr).
 
-
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -70,7 +68,6 @@ stop(Pid, Tr) ->
 %% Initializes the server
 %%
 %%--------------------------------------------------------------------
-
 
 init(_Tr, InitVal) ->
     {ok, InitVal}.
@@ -85,12 +82,9 @@ init(_Tr, InitVal) ->
 
 handle_call(_Tr, {set_value, Value}, _From, _State) ->
     {reply, ok, Value};
-
 handle_call(Tr, {start_from, Value}, _From, _State) ->
     NewPid = start_link(Tr, Value),
     {reply, NewPid, Value};
-
-
 handle_call(_Tr, get_value, _From, State) ->
     {reply, State, State}.
 
@@ -101,7 +95,7 @@ handle_call(_Tr, get_value, _From, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
-handle_cast(_Tr,_Request, State) ->
+handle_cast(_Tr, _Request, State) ->
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -109,7 +103,7 @@ handle_cast(_Tr,_Request, State) ->
 %% @doc
 %% @end
 %%--------------------------------------------------------------------
-handle_info(_Tr,_Info, State) ->
+handle_info(_Tr, _Info, State) ->
     {noreply, State}.
 
 %%--------------------------------------------------------------------

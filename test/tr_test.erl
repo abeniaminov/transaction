@@ -22,13 +22,12 @@ run_test_() ->
         fun(_) ->
             ok = application:stop(transaction)
         end,
-        {inorder,
-            [   ?_test(start_stop()),
-                ?_test(simple_get_record_version()),
-                ?_test(simple_get_no_record_version_wait()),
-                ?_test(simple_lock())
-            ]}
-    }.
+        {inorder, [
+            ?_test(start_stop()),
+            ?_test(simple_get_record_version()),
+            ?_test(simple_get_no_record_version_wait()),
+            ?_test(simple_lock())
+        ]}}.
 
 start_stop() ->
     %% create tgen_server behavoiur process and commit
@@ -56,21 +55,20 @@ start_stop() ->
     ?assertNot(is_process_alive(Pid)),
 
     %% Roll back process creation.
-    Tr3 =  transaction:start(),
+    Tr3 = transaction:start(),
     {ok, Pid2} = tgen_sampl:start_link(Tr3, 0),
     transaction:rollback(Tr3),
     ?assertNot(is_process_alive(Pid2)),
 
-
     %% Roll back process creation despite the interim state change
-    Tr4 =  transaction:start(),
+    Tr4 = transaction:start(),
     {ok, Pid4} = tgen_sampl:start_link(Tr4, 8),
     tgen_sampl:set_value(Pid4, Tr4, 12),
     transaction:rollback(Tr4),
     ?assertNot(is_process_alive(Pid4)),
 
     %% Roll back process creation despite the interim state change and stop
-    Tr5 =  transaction:start(),
+    Tr5 = transaction:start(),
     {ok, Pid5} = tgen_sampl:start_link(Tr5, 8),
     tgen_sampl:set_value(Pid5, Tr5, 12),
     tgen_server:stop(Pid5, Tr5),
@@ -78,7 +76,7 @@ start_stop() ->
     ?assertNot(is_process_alive(Pid5)),
 
     %% But
-    Tr6 =  transaction:start(),
+    Tr6 = transaction:start(),
     {ok, Pid6} = tgen_sampl:start_link(Tr6, 9),
     tgen_sampl:set_value(Pid6, Tr6, 12),
     {ok, Pid6_1} = tgen_sampl:start_from(Pid6, Tr6, 12),
@@ -86,8 +84,6 @@ start_stop() ->
     transaction:commit(Tr6),
     ?assertNot(is_process_alive(Pid6)),
     ?assert(is_process_alive(Pid6_1)).
-
-
 
 simple_get_record_version() ->
     Tr1 = transaction:start(),
@@ -106,26 +102,23 @@ simple_get_record_version() ->
     tgen_sampl:stop(o1, Tr3),
     transaction:commit(Tr3).
 
-
-
 simple_get_no_record_version_wait() ->
     Tr1 = transaction:start(),
     {ok, Pid} = tgen_sampl:start_link(Tr1, 0),
     transaction:commit(Tr1),
 
-    spawn(?MODULE, clientS,[start_wo, 1, 60, Pid]),
+    spawn(?MODULE, clientS, [start_wo, 1, 60, Pid]),
     timer:sleep(10),
     V = apply(?MODULE, clientR, [start_wo, 1, Pid]),
 
     ?assertEqual(1, V),
 
-
-    spawn(?MODULE, clientS,[start_wo, 2, 10, Pid]),
+    spawn(?MODULE, clientS, [start_wo, 2, 10, Pid]),
     timer:sleep(400),
     V2 = apply(?MODULE, clientR, [start_wo, 2, Pid]),
     ?assertEqual(2, V2),
 
-    spawn(?MODULE, clientS, [start_w, 3, 10,  Pid]),
+    spawn(?MODULE, clientS, [start_w, 3, 10, Pid]),
     timer:sleep(10),
     spawn(?MODULE, clientS, [start_wo, 4, 300, Pid]),
     timer:sleep(0),
@@ -133,13 +126,11 @@ simple_get_no_record_version_wait() ->
     ?assertEqual(busy, V3),
     timer:sleep(500),
 
-
     Tr2 = transaction:start(),
     tgen_sampl:stop(Pid, Tr2),
     transaction:commit(Tr2).
 
-
-clientS( Type, Val, Sleep, Obj) ->
+clientS(Type, Val, Sleep, Obj) ->
     Tr = transaction:Type(),
     tgen_sampl:set_value(Obj, Tr, Val),
     G = tgen_sampl:get_value(Obj, Tr),
@@ -154,7 +145,4 @@ clientR(Type, _R, Obj) ->
     transaction:commit(Tr),
     V.
 
-
-
 simple_lock() -> ok.
-
