@@ -683,14 +683,14 @@ code_change(_OldVsn, State, _Extra) ->
 %% ------------------------------------------------------------------
 
 commit_by_context(
-  #{tr_id := TrID} = _Tr,
+  TrID,
   #{tr_state := stopping, active_tid := ATID} = State
 ) when
   TrID =:= ATID
   ->
   State;
 commit_by_context(
-  #{tr_id := TrID} = _Tr,
+  TrID,
   #{tr_state := TrSt, active_tid := ATID, module := Mod} = State
 ) when
   TrID =:= ATID, TrSt =:= active;
@@ -708,15 +708,15 @@ commit_by_context(
     TrID => ActiveVState,
     monitor_ref => none
   };
-commit_by_context(#{tr_id := TrID} = _Tr, #{tr_state := active, active_tid := ATID} = State) when
+commit_by_context(TrID, #{tr_state := active, active_tid := ATID} = State) when
   TrID =/= ATID
   ->
   State;
-commit_by_context(#{tr_id := _TrID} = _Tr, #{tr_state := committed} = State) ->
+commit_by_context(_TrID = _Tr, #{tr_state := committed} = State) ->
   State.
 
 rollback_by_context(
-  #{tr_id := TrID} = _Tr,
+  TrID,
   #{tr_state := TRState, active_tid := ATID, committed_tid := CTID, module := Mod} = State
 ) when
   TRState =:= stopping, TrID =:= ATID, CTID =/= ATID
@@ -734,21 +734,21 @@ rollback_by_context(
     monitor_ref => none
   };
 rollback_by_context(
-  #{tr_id := TrID} = _Tr,
+  TrID,
   #{tr_state := TRState, active_tid := ATID, committed_tid := CTID} = State
 ) when
   TRState =:= stopping, TrID =:= ATID, CTID =:= ATID
   ->
   State;
 rollback_by_context(
-  #{tr_id := TrID} = _Tr,
+  TrID,
   #{tr_state := starting, active_tid := ATID} = State
 ) when
   TrID =:= ATID
   ->
   State#{tr_state => stopping};
 rollback_by_context(
-  #{tr_id := TrID} = _Tr,
+  TrID,
   #{tr_state := active, active_tid := ATID, committed_tid := CTID, module := Mod} = State
 ) when
   TrID =:= ATID
@@ -765,11 +765,11 @@ rollback_by_context(
     CTID => CommittedVState,
     monitor_ref => none
   };
-rollback_by_context(#{tr_id := TrID} = _Tr, #{tr_state := active, active_tid := ActiveTr} = State) when
+rollback_by_context(TrID, #{tr_state := active, active_tid := ActiveTr} = State) when
   TrID =/= ActiveTr
   ->
   State;
-rollback_by_context(#{tr_id := _TrID} = _Tr, #{tr_state := committed} = State) ->
+rollback_by_context(_TrID, #{tr_state := committed} = State) ->
   State.
 
 get_result_state({reply, Reply, NewState}) -> {Reply, NewState};

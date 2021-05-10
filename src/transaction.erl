@@ -102,9 +102,9 @@ start(Options) ->
 -spec commit(Tr :: gen_server:transaction()) -> committed | rolled_back.
 %%
 commit(#{tr_id := TrID} = Tr) when node(TrID) =/= node() ->
-  erpc:call(node(TrID), transaction, commit, [Tr]);
+  trpc:apply(node(TrID), transaction, commit, [Tr]);
 commit(#{tr_id := TrID} = Tr) ->
-  ChangedObjects = ets:lookup(write_log, Tr),
+  ChangedObjects = ets:lookup(write_log, TrID),
 
   R =
     case all_p(fun(Object) -> commit_object1(Object) end, ChangedObjects) of
@@ -126,9 +126,9 @@ commit(#{tr_id := TrID} = Tr) ->
 -spec rollback(Tr :: gen_server:transaction()) -> rolled_back.
 %%
 rollback(#{tr_id := TrID} = Tr) when node(TrID) =/= node() ->
-  erpc:call(node(TrID), transaction, rollback, [Tr]);
+  trpc:apply(node(TrID), transaction, rollback, [Tr]);
 rollback(#{tr_id := TrID} = Tr) ->
-  ChangedObjects = ets:lookup(write_log, Tr),
+  ChangedObjects = ets:lookup(write_log, TrID),
   lists:foreach(fun(Object) -> rollback_object(Object) end, ChangedObjects),
   %remove_dups(
   WaitingEndTransaction =
@@ -148,29 +148,29 @@ set_locks(Tr, [Pid | RestObjects]) ->
     deadlock -> deadlock
   end.
 
-write_transaction_log(#{tr_id := TrID} = Tr, ObjPid) when is_reference(TrID), node() =:= node(TrID) ->
-  ets:insert(write_log, {Tr, ObjPid});
+write_transaction_log(#{tr_id := TrID} = _Tr, ObjPid) when is_reference(TrID), node() =:= node(TrID) ->
+  ets:insert(write_log, {TrID, ObjPid});
 write_transaction_log(#{tr_id := TrID} = Tr, ObjPid) when is_reference(TrID), node() =/= node(TrID) ->
-  erpc:call(node(TrID), transaction, write_transaction_log, [Tr, ObjPid]).
+  trpc:apply(node(TrID), transaction, write_transaction_log, [Tr, ObjPid]).
 
 write_reading_log(TrID, ObjPid, CTID) when is_reference(TrID), node() =:= node(TrID) ->
   ets:insert(read_log, {{TrID, ObjPid}, CTID});
 write_reading_log(TrID, ObjPid, CTID) when is_reference(TrID), node() =/= node(TrID) ->
-  erpc:call(node(TrID), transaction, write_reading_log, [TrID, ObjPid, CTID]).
+  trpc:apply(node(TrID), transaction, write_reading_log, [TrID, ObjPid, CTID]).
 
 wait_subscribe(TrID, ATID, ObjPid, WaitClientPid) when
   is_reference(TrID), is_reference(ATID), node() =:= node(ATID) ->
   ets:insert(wait_log, {ATID, ObjPid, WaitClientPid, TrID});
 wait_subscribe(TrID, ATID, ObjPid, WaitClientPid) when
   is_reference(TrID), is_reference(ATID), node() =/= node(ATID) ->
-  erpc:call(node(ATID), transaction, wait_subscribe, [TrID, ATID, ObjPid, WaitClientPid]).
+  trpc:apply(node(ATID), transaction, wait_subscribe, [TrID, ATID, ObjPid, WaitClientPid]).
 
 wait_unsubscribe(TrID, ATID, ObjPid, WaitClientPid) when
   is_reference(TrID), is_reference(ATID), node() =:= node(ATID) ->
   ets:delete_object(wait_log, {ATID, ObjPid, WaitClientPid, TrID});
 wait_unsubscribe(TrID, ATID, ObjPid, WaitClientPid) when
   is_reference(TrID), is_reference(ATID), node() =/= node(ATID) ->
-  erpc:call(node(ATID), transaction, wait_unsubscribe, [TrID, ATID, ObjPid, WaitClientPid]).
+  trpc:apply(node(ATID), transaction, wait_unsubscribe, [TrID, ATID, ObjPid, WaitClientPid]).
 
 read_reading_log(TrID, ObjPid) when is_reference(TrID), is_pid(ObjPid), node(TrID) =:= node() ->
   Res = ets:lookup(read_log, {TrID, ObjPid}),
@@ -179,7 +179,7 @@ read_reading_log(TrID, ObjPid) when is_reference(TrID), is_pid(ObjPid), node(TrI
     [{{TrID, ObjPid}, CTID}] -> CTID
   end;
 read_reading_log(TrID, ObjPid) when is_reference(TrID), is_pid(ObjPid), node(TrID) =/= node() ->
-  erpc:call(node(TrID), transaction, read_reading_log, [TrID, ObjPid]).
+  trpc:apply(node(TrID), transaction, read_reading_log, [TrID, ObjPid]).
 
 %%%===================================================================
 %%% Internal functions
@@ -221,9 +221,9 @@ rollback_object({Tr, Pid}) ->
   gen_server:call(Pid, {Tr, rollback}).
 
 flush_tr_log(#{tr_id := TrID} = Tr) when node(TrID) =/= node() ->
-  erpc:call(node(TrID), transaction, flush_tr_log, [Tr]);
+  trpc:apply(node(TrID), transaction, flush_tr_log, [Tr]);
 flush_tr_log(#{tr_id := TrID} = Tr) ->
-  ets:delete(write_log, Tr),
+  ets:delete(write_log, TrID),
   ets:match_delete(read_log, {{TrID, '$1'}, '_'}),
   ets:delete(wait_log, TrID).
 
@@ -241,6 +241,7 @@ remove_dups([H | T]) -> [H | [X || X <- remove_dups(T), X /= H]].
 %%%===================================================================
 
 init(_Arg) ->
+  io:format("!!!!!!!!!!!!!!~nStart transaction~n!!!!!!!!!!!!!!!!!~n", []),
   ets:new(write_log, [bag, public, named_table, {read_concurrency, true}]),
   ets:new(read_log, [ordered_set, public, named_table, {read_concurrency, true}]),
   ets:new(wait_log, [bag, public, named_table, {read_concurrency, true}]),

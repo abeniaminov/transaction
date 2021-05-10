@@ -14,6 +14,6 @@
         kernel,
         stdlib
     ]},
-    {mod, {transaction_app, [trpc]}},
+    {modules, [trpc]},
     {env, []}
 ]}.
